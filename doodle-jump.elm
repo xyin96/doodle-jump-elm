@@ -32,7 +32,7 @@ platforms = [{ x = halfWidth, y = 0, width = 100 }, { x = halfWidth / 2, y = 10,
 -- Update
 
 updatePlatform : Bouncer -> Platform -> Platform
-updatePlatform bouncer platform = { x = platform.x, y = platform.y - bouncer.height, width = platform.width }
+updatePlatform bouncer platform = { x = platform.x, y = platform.y, width = platform.width }
 
 collision : Platform -> Bouncer -> Bouncer
 collision platform bouncer = {
