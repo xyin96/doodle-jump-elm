@@ -21,11 +21,11 @@ input = sampleOn delta (merge (map MouseMove Mouse.position) (map (always Click)
 (halfWidth, halfHeight) = (300, 200)
 
 type alias Game = { x : Float, y : Float, vx : Float, vy : Float, height : Float, gameOver : Bool }
-type alias Platform = { x : Float, y : Float, width : Float }
+type alias Platform = { x : Float, y : Float, width : Float, ay : Float }
 
 game = foldp update { x = 0, y = 0, vx = 0, vy = 5, height = 0, gameOver = False } input
 
-platforms = [{ x = halfWidth, y = 0, width = 100 }, { x = halfWidth / 2, y = 10, width = 100 },  { x = halfWidth * 3 / 2, y = -100, width = 100 }]
+platforms = [{ x = halfWidth, y = 0, width = 100, ay =  0 }, { x = halfWidth / 2, y = 10, width = 100, ay = 100 },  { x = halfWidth * 3 / 2, y = -100, width = 100, ay = -100 }]
 
 -- Update
 
@@ -39,6 +39,13 @@ collision platform bouncer = {
           | otherwise -> bouncer.vy,
   height = bouncer.height,
   gameOver = bouncer.gameOver}
+  
+  
+updatePlatforms : Game -> List Platform -> List Platform
+updatePlatforms game platforms =
+  case platforms of 
+    platform :: rest -> { platform | y <- platform.ay - game.height } :: updatePlatforms game rest
+    [] -> []
 
 update : Input -> Game -> Game
 update input game = 
@@ -46,13 +53,17 @@ update input game =
     MouseMove (mouseX, mouseY) -> 
       List.foldr collision { 
         x = game.x - game.vx,
-        y = game.y + game.vy,
+        y = if | game.y < 50 -> game.y + game.vy
+               | game.vy < 0 -> game.y + game.vy
+               | otherwise -> game.y,
         vx = (game.x - toFloat mouseX) / 5, 
         vy = game.vy - 0.5,
-        height = game.height,
+        height = if | game.y < 50 -> game.height
+                    | game.vy > 0 && game.y >= 50 -> game.height + game.vy
+                    | otherwise -> game.height + game.vy,
         gameOver = if | game.y < -1 * halfHeight -> True
-                    | otherwise -> False
-      } platforms
+                      | otherwise -> False
+      } (updatePlatforms game platforms)
     Click -> if | game.gameOver -> { game | x <- halfWidth, y <- 0, vx <- 0, vy <- 10, gameOver <- False }
                 | otherwise -> game
 
@@ -67,8 +78,8 @@ display (w, h) g =
     rect gameWidth gameHeight |> filled (rgb 200 200 200),
     oval 15 15 |> filled (rgb 0 0 0) |> move (x - toFloat w / toFloat 2, y),
     if | g.gameOver -> toForm (asText "GameOver") |> move (150,150)
-       | otherwise -> toForm (asText "") |> move (0,0)
-  ] (List.map renderPlatforms platforms))
+       | otherwise -> toForm (asText height) |> move (150,150)
+  ] (List.map renderPlatforms (updatePlatforms g platforms)))
   |> container w h middle
 
 renderPlatforms : Platform -> Form
