@@ -7,6 +7,7 @@ import Graphics.Collage (..)
 import Graphics.Element (..)
 import List
 import Window
+import Random
 
 -- Inputs
 type Input = Click | MouseMove (Int, Int)
@@ -20,52 +21,68 @@ input = sampleOn delta (merge (map MouseMove Mouse.position) (map (always Click)
 (gameWidth, gameHeight) = (600, 400)
 (halfWidth, halfHeight) = (300, 200)
 
-type alias Game = { x : Float, y : Float, vx : Float, vy : Float, height : Float, gameOver : Bool }
-type alias Platform = { x : Float, y : Float, width : Float, ay : Float }
+type alias Game = { x : Float, y : Float, vx : Float, vy : Float, height : Float, gameOver : Bool, platforms : List Platform, time : Int }
+type alias Platform = { x : Float, y : Float, width : Float, ay : Float, action : Int }
 
-game = foldp update { x = 0, y = 0, vx = 0, vy = 5, height = 0, gameOver = False } input
-
-platforms = [{ x = 0, y = 0, width = 100, ay =  0 }, { x = 150, y = 10, width = 100, ay = 100 },  { x = -150, y = -100, width = 100, ay = -100 }]
+game = foldp update { time = 0, x = 0, y = 0, vx = 0, vy = 5, height = 0, gameOver = False, platforms = [{ x = 0, y = 0, width = 100, ay =  0, action = 1 }, { x = 150, y = 10, width = 100, ay = 100, action = 0 },  { x = -150, y = -100, width = 100, ay = -100, action = 0 }, { x = 0, y = 0, width = 100, ay =  200, action = 0 }, { x = 0, y = 0, width = 100, ay =  250, action = 0 }] } input
 
 -- Update
 
 
-collision : Platform -> Game -> Game
-collision platform bouncer = {
-  x = bouncer.x,
-  y = bouncer.y,
-  vx = bouncer.vx,
-  vy = if | bouncer.vy < 0 && bouncer.x < platform.x + platform.width / 2 && bouncer.x > platform.x - platform.width / 2 && bouncer.y < platform.y + 15 && bouncer.y > platform.y -> 10
-          | otherwise -> bouncer.vy,
-  height = bouncer.height,
-  gameOver = bouncer.gameOver}
+collision : Game -> Bool
+collision game = collisionAux game.platforms game
+  
+collisionAux : List Platform -> Game -> Bool
+collisionAux platforms game = 
+  case platforms of
+    platform :: rest -> game.vy < 0 && game.x < platform.x + platform.width / 2 && game.x > platform.x - platform.width / 2 && game.y < platform.y + 20 && game.y > platform.y + 5 || (collisionAux rest game)
+    [] -> False
   
   
 updatePlatforms : Game -> List Platform -> List Platform
-updatePlatforms game platforms =
+updatePlatforms game platforms  =
   case platforms of 
-    platform :: rest -> { platform | y <- platform.ay - game.height } :: updatePlatforms game rest
+    platform :: rest -> (updatePlatform game platform) :: (updatePlatforms game rest)
     [] -> []
+    
+updatePlatform : Game -> Platform -> Platform
+updatePlatform game platform = 
+  let (rand, seed) = (Random.generate (Random.float (-78.125) 78.125) (Random.initialSeed game.time))
+      (rand2, seed2) = (Random.generate (Random.float (-1 * halfWidth) halfWidth) (Random.initialSeed game.time))
+      (rand3, seed3) = (Random.generate (Random.int 0 10) (Random.initialSeed game.time))
+      newAY = if | (platform.ay - game.height) < -1 * halfHeight -> game.height + halfHeight
+                 | otherwise -> platform.ay in
+  { platform | ay <- newAY,
+               y <- otherwise -> newAY - game.height,
+               x <- if | (platform.ay - game.height) < -1 * halfHeight -> rand2
+                       | platform.action <= 6 -> platform.x
+                       | platform.action <= 8 -> platform.x + (cos (toFloat game.time / 25)) * 2
+                       | otherwise -> platform.x,
+               action <- if | (platform.ay - game.height) < -1 * halfHeight -> rand3
+                            | otherwise -> platform.action}
+      
 
 update : Input -> Game -> Game
 update input game = 
   case input of
-    MouseMove (mouseX, mouseY) -> 
-      List.foldr collision { game |
+    MouseMove (mouseX, mouseY) ->  { game |
         x <- game.x - game.vx,
         y <- if | game.gameOver -> game.y
                 | game.y < 50 -> game.y + game.vy
                 | game.vy < 0 -> game.y + game.vy
                 | otherwise -> game.y,
         vx <- (game.x - toFloat mouseX + halfWidth) / 5, 
-        vy <- game.vy - 0.5,
+        vy <- if | (collision game) -> 12.5
+                 | otherwise -> game.vy - 0.5,
         height <- if | game.y < 50 -> game.height
                      | game.vy > 0 && game.y >= 50 -> game.height + game.vy
                      | otherwise -> game.height + game.vy,
         gameOver <- if | game.y < -1 * halfHeight -> True
-                      | otherwise -> False
-      } (updatePlatforms game platforms)
-    Click -> if | game.gameOver -> { game | x <- halfWidth, y <- 0, vx <- 0, vy <- 10, height <- 0, gameOver <- False }
+                       | otherwise -> False,
+        platforms <- (updatePlatforms game game.platforms),
+        time <- game.time + 1
+      }
+    Click -> if | game.gameOver -> { game | x <- 0, y <- 0, vx <- 0, vy <- 10, height <- 0, gameOver <- False, platforms <- [{ x = 0, y = 0, width = 100, ay =  0, action = 1 }, { x = 150, y = 10, width = 100, ay = 100, action = 0 },  { x = -150, y = -100, width = 100, ay = -100, action = 0 }, { x = 0, y = 0, width = 100, ay =  200, action = 0 }, { x = 0, y = 0, width = 100, ay =  250, action = 0 }] }
                 | otherwise -> game
 
 
@@ -80,10 +97,16 @@ display (w, h) g =
     oval 15 15 |> filled (rgb 0 0 0) |> move (x, y),
     if | g.gameOver -> toForm (asText "GameOver") |> move (150,150)
        | otherwise -> toForm (asText height) |> move (150,150)
-  ] (List.map renderPlatforms (updatePlatforms g platforms)))
+  ] (renderPlatforms g.platforms))
   |> container gameWidth gameHeight middle
 
-renderPlatforms : Platform -> Form
-renderPlatforms platform = rect platform.width 15 |> filled (rgb 15 15 15) |> move (platform.x, platform.y)
+renderPlatforms : List Platform -> List Form
+renderPlatforms platforms = 
+  case platforms of
+    platform :: rest -> renderPlatform platform :: renderPlatforms rest
+    [] -> []
+
+renderPlatform : Platform -> Form
+renderPlatform platform = rect platform.width 15 |> filled (rgb 15 15 15) |> move (platform.x, platform.y)
 
 main = map2 display Window.dimensions game
