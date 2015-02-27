@@ -48,15 +48,15 @@ updatePlatforms game platforms  =
 updatePlatform : Game -> Platform -> Platform
 updatePlatform game platform = 
   let (rand, seed) = (Random.generate (Random.float (-78.125) 78.125) (Random.initialSeed game.time))
-      (rand2, seed2) = (Random.generate (Random.float (-1 * halfWidth) halfWidth) (Random.initialSeed game.time))
+      (rand2, seed2) = (Random.generate (Random.float (-1 * halfWidth) halfWidth) (Random.initialSeed (round (toFloat game.time * rand))))
       (rand3, seed3) = (Random.generate (Random.int 0 10) (Random.initialSeed game.time))
       newAY = if | (platform.ay - game.height) < -1 * halfHeight -> game.height + halfHeight
                  | otherwise -> platform.ay in
   { platform | ay <- newAY,
-               y <- otherwise -> newAY - game.height,
+               y <- newAY - game.height,
                x <- if | (platform.ay - game.height) < -1 * halfHeight -> rand2
                        | platform.action <= 6 -> platform.x
-                       | platform.action <= 8 -> platform.x + (cos (toFloat game.time / 25)) * 2
+                       | platform.action <= 10 -> platform.x + (cos (toFloat game.time / 25)) * 2
                        | otherwise -> platform.x,
                action <- if | (platform.ay - game.height) < -1 * halfHeight -> rand3
                             | otherwise -> platform.action}
